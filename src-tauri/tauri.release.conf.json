@@ -1,1 +1,8 @@
-{ "bundle": { "createUpdaterArtifacts": true } }
+{
+  "bundle": { "createUpdaterArtifacts": true },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZDOURDRkQ3NUQ4RjREODMKUldTRFRZOWQxOCtkL0drbG5pZmxhcFhpU2lVdXhaUXJyWHJCQ0lGM283VnhDcjVtUzRQWENhcUoK"
+    }
+  }
+}

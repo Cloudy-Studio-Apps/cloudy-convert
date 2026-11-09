@@ -1,10 +1,11 @@
 # Builds a release when a version tag is pushed (`pnpm release:tag 0.2.0` pushes `v0.2.0`).
 #
-# Everything lands in a DRAFT release: the Windows installer, the Ubuntu .deb, the .rpm, the AppImage, the updater signatures (`.sig`, which the
-# Cloudy Launcher checks before installing) and `latest.json`. Its description is GitHub's notes
-# generated from the commits since the last release. Once every build passed, `publish` publishes
-# it and the launcher offers the update; a failed build leaves the draft unpublished (re-run the
-# failed job: when it passes, the release is published).
+# Everything lands in a DRAFT release: the Windows installer, the Ubuntu .deb, the .rpm, the
+# AppImage, the Arch package, the updater signatures (`.sig`, which the Cloudy Launcher checks
+# before installing) and `latest.json`. Its description is GitHub's notes generated from the commits
+# since the last release. Once every build passed, `publish` publishes it and the launcher offers
+# the update; a failed build leaves the draft unpublished (re-run the failed job: when it passes,
+# the release is published).
 #
 # Needs the secrets TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 # (Cloudy-Studio-Apps organization secrets, the one key every Cloudy app signs with), which sign
@@ -130,10 +131,43 @@ jobs:
           updaterJsonPreferNsis: true
           args: --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
 
+  arch:
+    name: Build (Arch Linux)
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build tools
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git github-cli nodejs pnpm rustup \
+            webkit2gtk-4.1 gtk3 libsoup3 librsvg openssl
+
+      - uses: actions/checkout@v4
+
+      # makepkg refuses to run as root.
+      - name: Build the package
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- env HOME=/home/builder bash -euc '
+            cd "$GITHUB_WORKSPACE"
+            rustup default stable
+            pnpm install --frozen-lockfile
+            pnpm release:arch
+          '
+
+      - name: Upload it to the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gh release upload "$GITHUB_REF_NAME" packaging/arch/*.pkg.tar.zst --clobber \
+            --repo "$GITHUB_REPOSITORY"
+
   publish:
     name: Publish the release
     # Runs only when every build above passed.
-    needs: [create-release, build]
+    needs: [create-release, build, arch]
     runs-on: ubuntu-latest
     steps:
       - name: Publish

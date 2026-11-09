@@ -39,7 +39,9 @@ const files = [
   "src-tauri/Cargo.lock",
 ];
 git("add", ...files);
-git("commit", "-m", `Release ${tag}`);
+// Re-releasing the version the files already have (e.g. after deleting a failed release) changes
+// nothing, so there's nothing to commit: tag the current commit.
+if (git("diff", "--cached", "--name-only") !== "") git("commit", "-m", `Release ${tag}`);
 git("tag", "-a", tag, "-m", `Cloudy Convert ${tag}`);
 git("push", "origin", "master", tag);
 

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Cloudy Convert
+Comment=Convert footage for editing and save media from the web
+Exec=cloudy-convert
+Icon=cloudy-convert
+StartupWMClass=cloudy-convert
+Categories=AudioVideo;Video;
+Terminal=false

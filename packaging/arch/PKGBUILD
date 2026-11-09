@@ -1,0 +1,29 @@
+# Local pacman package for Arch-based systems (Arch, CachyOS, …).
+# Packages the binary built by `tauri build --no-bundle`; run `pnpm release:arch`
+# from the repo root, then `sudo pacman -U packaging/arch/cloudy-convert-*.pkg.tar.zst`.
+# yt-dlp isn't a dependency: the app installs and updates its own copy.
+
+_root="$startdir/../.."
+_tauri="$_root/src-tauri"
+
+pkgname=cloudy-convert
+pkgver=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$_tauri/tauri.conf.json")
+pkgrel=1
+pkgdesc="Cloudy Convert — convert footage for editing and save media from the web"
+arch=('x86_64')
+url="https://github.com/Cloudy-Studio-Apps/cloudy-convert"
+license=('AGPL-3.0-only')
+depends=('webkit2gtk-4.1' 'gtk3' 'libsoup3' 'hicolor-icon-theme' 'ffmpeg')
+options=('!strip' '!debug')
+
+package() {
+  install -Dm755 "$_tauri/target/release/cloudy-convert" "$pkgdir/usr/bin/cloudy-convert"
+
+  install -Dm644 "$startdir/cloudy-convert.desktop" "$pkgdir/usr/share/applications/cloudy-convert.desktop"
+
+  local icons="$_tauri/icons" share="$pkgdir/usr/share/icons/hicolor"
+  install -Dm644 "$icons/32x32.png" "$share/32x32/apps/cloudy-convert.png"
+  install -Dm644 "$icons/128x128.png" "$share/128x128/apps/cloudy-convert.png"
+  install -Dm644 "$icons/128x128@2x.png" "$share/256x256/apps/cloudy-convert.png"
+  install -Dm644 "$icons/icon.png" "$share/512x512/apps/cloudy-convert.png"
+}
