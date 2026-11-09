@@ -1,0 +1,14 @@
+/* Converter list rows (thumbnail column, preview highlight). */
+
+.row-item.is-previewing { border-color: rgba(242, 165, 49, 0.55); box-shadow: inset 3px 0 0 var(--accent); }
+.preview-btn.on { color: var(--accent); }
+.thumb { cursor: pointer; }
+.thumb.audio { cursor: default; display: grid; place-items: center; color: var(--muted); background: var(--panel-2); }
+.thumb.audio.draggable { cursor: grab; }
+.thumb-play { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; background: rgba(0, 0, 0, 0.35); opacity: 0; transition: opacity 0.15s; }
+.thumb:hover .thumb-play { opacity: 1; }
+
+@media (max-width: 1100px) {
+  .row-item { grid-template-columns: 18px 104px minmax(0, 1fr) 150px 120px 26px 26px; gap: 10px; }
+  .thumb { width: 104px; height: 58px; }
+}
