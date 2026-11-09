@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "release:linux": "NO_STRIP=true tauri build --bundles deb,rpm,appimage",
+    "release:tag": "node scripts/release-tag.mjs",
     "release:win": "node scripts/fetch-ffmpeg-win.mjs && tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc"
   },
   "dependencies": {

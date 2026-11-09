@@ -1,0 +1,145 @@
+# Builds a release when a version tag is pushed (`pnpm release:tag 0.2.0` pushes `v0.2.0`).
+#
+# Everything lands in a DRAFT release: the Windows installer, the Ubuntu .deb, the .rpm, the AppImage, the updater signatures (`.sig`, which the
+# Cloudy Launcher checks before installing) and `latest.json`. Its description is GitHub's notes
+# generated from the commits since the last release. Once every build passed, `publish` publishes
+# it and the launcher offers the update; a failed build leaves the draft unpublished (re-run the
+# failed job: when it passes, the release is published).
+#
+# Needs the secrets TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+# (Cloudy-Studio-Apps organization secrets, the one key every Cloudy app signs with), which sign
+# the installers.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Create the draft release
+    runs-on: ubuntu-latest
+    outputs:
+      release-id: ${{ steps.draft.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app's version
+        run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match tauri.conf.json's version $version"
+            exit 1
+          fi
+
+      # Fails before anything is built when the signing key can't be reached. It comes from the
+      # Cloudy-Studio-Apps organization secrets (a repository secret of the same name overrides it).
+      # On GitHub's Free plan, private repositories don't get organization secrets: set them on
+      # the repository instead.
+      - name: Check the signing key is available
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$PASSWORD" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY or TAURI_SIGNING_PRIVATE_KEY_PASSWORD isn't available to this repository. Check the organization secrets' repository access."
+            exit 1
+          fi
+
+      - name: Create the draft
+        id: draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Created through the API, which answers with the id: listing releases right after
+        # creating one may not show the new draft yet, and the builds would then upload nothing.
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+            -f tag_name="$GITHUB_REF_NAME" -f name="Cloudy Convert $GITHUB_REF_NAME" \
+            -F draft=true -F generate_release_notes=true --jq .id)
+          if [ -z "$id" ]; then
+            echo "::error::Couldn't create the draft release"
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            args: --bundles nsis
+          # The oldest supported Ubuntu, so the AppImage runs on more distros.
+          - name: Linux
+            os: ubuntu-22.04
+            args: --bundles deb,rpm,appimage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            libxdo-dev libssl-dev build-essential patchelf rpm
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: pnpm install --frozen-lockfile
+
+      # The Windows installer bundles ffmpeg.exe and ffprobe.exe (src-tauri/tauri.windows.conf.json).
+      # Git Bash puts `unzip` on PATH for the script.
+      - name: Download FFmpeg for Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: node scripts/fetch-ffmpeg-win.mjs
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          NO_STRIP: "true"
+        with:
+          releaseId: ${{ needs.create-release.outputs.release-id }}
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
+
+  publish:
+    name: Publish the release
+    # Runs only when every build above passed.
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.create-release.outputs.release-id }}
+        run: |
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false -f make_latest=true --silent
