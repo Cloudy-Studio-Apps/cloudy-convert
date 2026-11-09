@@ -1,6 +1,7 @@
 # Local pacman package for Arch-based systems (Arch, CachyOS, …).
 # Packages the binary built by `tauri build --no-bundle`; run `pnpm release:arch`
-# from the repo root, then `sudo pacman -U packaging/arch/cloudy-convert-*.pkg.tar.zst`.
+# from the repo root (makepkg --nodeps: the dependencies are for the machine that installs it,
+# not the one that builds it), then `sudo pacman -U packaging/arch/cloudy-convert-*.pkg.tar.zst`.
 # yt-dlp isn't a dependency: the app installs and updates its own copy.
 
 _root="$startdir/../.."
