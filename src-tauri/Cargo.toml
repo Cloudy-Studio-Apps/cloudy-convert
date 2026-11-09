@@ -1,6 +1,6 @@
 [package]
 name = "cloudy-convert"
-version = "0.1.0"
+version = "0.0.1"
 description = "Cloudy Convert: convert camera footage for editing and download media from the web"
 authors = ["DarkRedgm"]
 edition = "2021"
